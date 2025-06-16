@@ -21,7 +21,7 @@ namespace WindowzHandles
 
     class Program
     {
-        static string strApiKey = "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";
+        static string strApiKey = "sk-proj-OWUo2UELs4HCyk43fI1hQZ_tQSS_jVGBG7R0Sximv5PudECT3BlbkFJkaOSP_-nG7s_vPPbpvbBayLfLIWnWi8AjNM73g7QebOWMufTB_NNl1g9jtMNyfpomMM2Qu6FAA";
 
         static void Main()
         {
@@ -37,8 +37,8 @@ namespace WindowzHandles
             {
                 oDriver.Navigate().GoToUrl("https://falconnest.solano.edu");
                 Thread.Sleep(1000);
-                oDriver.FindElement(By.Id("usernameUserInput")).SendKeys("gking8");
-                oDriver.FindElement(By.Id("password")).SendKeys("EXEU9U");
+                oDriver.FindElement(By.Id("usernameUserInput")).SendKeys("USERNAME");
+                oDriver.FindElement(By.Id("password")).SendKeys("PASSWORD");
                 oDriver.FindElement(By.CssSelector("button[type='submit']")).Click();
                 Thread.Sleep(1000);
 
