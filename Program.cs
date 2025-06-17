@@ -1,215 +1,189 @@
-﻿// Updated Program.cs for stable multithreaded summary generation
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
-using System.Threading;
-using System.Threading.Tasks;
+using OpenQA.Selenium.Support.UI;
 using System.Net.Http;
 using System.Text;
 using Newtonsoft.Json;
 
 namespace WindowzHandles
 {
-    class cModuleItem
+    internal class Program
     {
-        public string strName;
-        public string strType;
-        public string strUrl;
-    }
-
-    class Program
-    {
-        static string strApiKey = "";
-
         static void Main()
         {
-            List<cModuleItem> lstModuleItems = new List<cModuleItem>();
-            ChromeOptions oOptions = new ChromeOptions();
-            oOptions.AddArgument("--log-level=3");
-            oOptions.AddExcludedArgument("enable-logging");
-            ChromeDriverService oService = ChromeDriverService.CreateDefaultService();
-            oService.SuppressInitialDiagnosticInformation = true;
-            oService.HideCommandPromptWindow = true;
+            string strUrl = "https://falconnest.solano.edu";
+            string strUsername = "gking8";
+            string strPassword = "EXEU9U";
 
-            using (IWebDriver oDriver = new ChromeDriver(oService, oOptions))
+            ChromeOptions objOptions = new ChromeOptions();
+            objOptions.AddArgument("--log-level=3");
+            objOptions.AddExcludedArgument("enable-logging");
+
+            ChromeDriverService objService = ChromeDriverService.CreateDefaultService();
+            objService.SuppressInitialDiagnosticInformation = true;
+            objService.HideCommandPromptWindow = true;
+
+            using (IWebDriver objDriver = new ChromeDriver(objService, objOptions))
             {
-                oDriver.Navigate().GoToUrl("https://falconnest.solano.edu");
-                Thread.Sleep(1000);
-                oDriver.FindElement(By.Id("usernameUserInput")).SendKeys(""); //Canvas username
-                oDriver.FindElement(By.Id("password")).SendKeys("");  //Canvas password inside ""'s
-                oDriver.FindElement(By.CssSelector("button[type='submit']")).Click();
+                objDriver.Navigate().GoToUrl(strUrl);
+                Thread.Sleep(500);
+
+                objDriver.FindElement(By.Id("usernameUserInput")).SendKeys(strUsername);
+                objDriver.FindElement(By.Id("password")).SendKeys(strPassword);
+                objDriver.FindElement(By.CssSelector("button[type='submit']")).Click();
+                Thread.Sleep(500);
+
+                objDriver.Navigate().GoToUrl("http://solano.instructure.com/");
                 Thread.Sleep(1000);
 
-                oDriver.Navigate().GoToUrl("http://solano.instructure.com/");
-                Thread.Sleep(1500);
-
-                var lstCourses = oDriver.FindElements(By.CssSelector("div.ic-DashboardCard__box .ic-DashboardCard"));
                 List<(string strName, string strUrl)> lstCourseList = new List<(string, string)>();
-                foreach (var oElement in lstCourses)
+                var colCourseElements = objDriver.FindElements(By.CssSelector("div.ic-DashboardCard__box .ic-DashboardCard"));
+                foreach (var objCourseElement in colCourseElements)
                 {
                     try
                     {
-                        var oLink = oElement.FindElement(By.CssSelector("a"));
-                        string strCourseName = oLink.Text.Trim();
-                        string strCourseUrl = oLink.GetAttribute("href");
-                        if (!string.IsNullOrEmpty(strCourseName))
+                        var objLink = objCourseElement.FindElement(By.CssSelector("a"));
+                        string strCourseName = objLink.Text.Trim();
+                        string strCourseUrl = objLink.GetAttribute("href");
+                        if (!string.IsNullOrEmpty(strCourseName) && !string.IsNullOrEmpty(strCourseUrl))
                             lstCourseList.Add((strCourseName, strCourseUrl));
                     }
                     catch { }
                 }
 
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine("Available courses:");
-                Console.ResetColor();
+                if (lstCourseList.Count == 0)
+                {
+                    Console.WriteLine("No courses found.");
+                    return;
+                }
 
-                for (int i = 0; i < lstCourseList.Count; i++)
-                    Console.WriteLine($"{i + 1}: {lstCourseList[i].strName}");
+                Console.WriteLine("Available courses:");
+                for (int intI = 0; intI < lstCourseList.Count; intI++)
+                    Console.WriteLine($"{intI + 1}: {lstCourseList[intI].strName}");
 
                 Console.Write("Select a course by entering its number: ");
-                int nSelected = int.Parse(Console.ReadLine());
-                string strSelectedUrl = lstCourseList[nSelected - 1].strUrl;
+                int intSelected = 0;
+                while (!int.TryParse(Console.ReadLine(), out intSelected) || intSelected < 1 || intSelected > lstCourseList.Count)
+                    Console.Write("Invalid input. Please enter a valid course number: ");
 
-                oDriver.Navigate().GoToUrl(strSelectedUrl + "/modules");
-                Thread.Sleep(3000);
+                string strSelectedUrl = lstCourseList[intSelected - 1].strUrl;
+                objDriver.Navigate().GoToUrl(strSelectedUrl);
+                Console.WriteLine($"Navigated to: {lstCourseList[intSelected - 1].strName}");
 
-                var lstModules = oDriver.FindElements(By.CssSelector("div.context_module"));
-                foreach (var oModule in lstModules)
+                Console.Write("Browse by (1) Assignments or (2) Modules? Enter 1 or 2: ");
+                int intBrowseChoice = 0;
+                while (!int.TryParse(Console.ReadLine(), out intBrowseChoice) || (intBrowseChoice != 1 && intBrowseChoice != 2))
+                    Console.Write("Invalid input. Please enter 1 for Assignments or 2 for Modules: ");
+
+                if (intBrowseChoice == 2)
                 {
-                    try
-                    {
-                        var oTitle = oModule.FindElement(By.CssSelector("h2 span.name"));
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine(oTitle.Text.Trim());
-                        Console.ResetColor();
-                    }
-                    catch { Console.WriteLine("Unnamed Module"); }
+                    objDriver.Navigate().GoToUrl(strSelectedUrl + "/modules");
 
-                    var lstItems = oModule.FindElements(By.CssSelector("li.context_module_item"));
-                    Console.WriteLine($"    Found {lstItems.Count} items");
+                    WebDriverWait objWait = new WebDriverWait(objDriver, TimeSpan.FromSeconds(10));
+                    objWait.Until(d => d.FindElements(By.CssSelector("div.context_module")).Count > 0);
+                    Thread.Sleep(2000);
 
-                    foreach (var oItem in lstItems)
+                    var colModules = objDriver.FindElements(By.CssSelector("div.context_module"));
+
+                    List<(string strTitle, string strType, string strName, string strLink)> lstModuleItems = new List<(string, string, string, string)>();
+
+                    foreach (var objModule in colModules)
                     {
-                        string strType = "Unknown";
-                        string strName = "Unnamed Item";
-                        string strLink = "";
                         try
                         {
-                            var oIcon = oItem.FindElement(By.CssSelector("span.type_icon"));
-                            strType = oIcon.GetAttribute("title")?.Trim() ?? "Unknown";
+                            var objModuleTitleElem = objModule.FindElement(By.CssSelector("h2 span.name"));
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine(objModuleTitleElem.Text.Trim());
+                            Console.ResetColor();
                         }
-                        catch { }
-
-                        try
+                        catch
                         {
-                            var oSpan = oItem.FindElement(By.CssSelector("span.item_name"));
-                            var oLink = oSpan.FindElements(By.CssSelector("a")).FirstOrDefault();
-                            if (oLink != null)
-                            {
-                                strName = oLink.Text.Trim();
-                                strLink = oLink.GetAttribute("href")?.Trim() ?? "";
-                            }
-                            else
-                            {
-                                strName = oSpan.Text.Trim();
-                            }
-                        }
-                        catch { }
-
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine("    " + strType);
-                        Console.ResetColor();
-                        Console.WriteLine("    " + strName);
-                        if (!string.IsNullOrEmpty(strLink))
-                        {
-                            Console.ForegroundColor = ConsoleColor.Blue;
-                            Console.WriteLine("    Link: " + strLink);
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("Unnamed Module");
                             Console.ResetColor();
                         }
 
-                        if (!string.IsNullOrEmpty(strLink) && strLink.Contains("/modules/items/"))
-                            lstModuleItems.Add(new cModuleItem { strName = strName, strType = strType, strUrl = strLink });
-                    }
-                }
-            }
+                        var colItems = objModule.FindElements(By.CssSelector("li.context_module_item"));
+                        Console.WriteLine($"    Found {colItems.Count} items");
 
-            Console.WriteLine("\nRetrieving and summarizing content from module item links...\n");
-            SemaphoreSlim oSemaphore = new SemaphoreSlim(3); // limit concurrency
-            List<Task> lstTasks = new List<Task>();
-
-            foreach (var oItem in lstModuleItems)
-            {
-                lstTasks.Add(Task.Run(async () =>
-                {
-                    await oSemaphore.WaitAsync();
-                    try
-                    {
-                        ChromeOptions oOpt = new ChromeOptions();
-                        oOpt.AddArgument("--headless");
-                        oOpt.AddArgument("--log-level=3");
-                        ChromeDriverService oSvc = ChromeDriverService.CreateDefaultService();
-                        oSvc.HideCommandPromptWindow = true;
-
-                        using (IWebDriver oDrv = new ChromeDriver(oSvc, oOpt))
+                        foreach (var objItem in colItems)
                         {
-                            oDrv.Navigate().GoToUrl(oItem.strUrl);
+                            string strType = "Unknown";
+                            try
+                            {
+                                var objIcon = objItem.FindElement(By.CssSelector("span.type_icon"));
+                                strType = objIcon.GetAttribute("title")?.Trim() ?? "Unknown";
+                            }
+                            catch { }
+
+                            string strName = "Unnamed Item";
+                            string strLinkUrl = "";
+                            try
+                            {
+                                var objNameSpan = objItem.FindElement(By.CssSelector("span.item_name"));
+                                strName = objNameSpan.Text.Trim();
+
+                                var objLink = objNameSpan.FindElements(By.CssSelector("a")).FirstOrDefault();
+                                if (objLink != null)
+                                {
+                                    strName = objLink.Text.Trim();
+                                    strLinkUrl = objLink.GetAttribute("href")?.Trim() ?? "";
+                                }
+                            }
+                            catch { }
+
+                            Console.ForegroundColor = ConsoleColor.Magenta;
+                            Console.WriteLine($"    {strType}");
+                            Console.ResetColor();
+
+                            Console.WriteLine($"    {strName}");
+
+                            if (!string.IsNullOrWhiteSpace(strLinkUrl))
+                            {
+                                Console.ForegroundColor = ConsoleColor.Blue;
+                                Console.WriteLine($"    Link: {strLinkUrl}");
+                                Console.ResetColor();
+
+                                lstModuleItems.Add((strName, strType, strName, strLinkUrl));
+                            }
+                        }
+
+                        Console.WriteLine();
+                    }
+
+                    Console.WriteLine("\nRetrieving and summarizing content from module item links...\n");
+
+                    foreach (var objItem in lstModuleItems)
+                    {
+                        try
+                        {
+                            objDriver.Navigate().GoToUrl(objItem.strLink);
                             Thread.Sleep(2000);
 
-                            string strPageText = oDrv.FindElement(By.TagName("body")).Text;
-                            string strSummary = await fQueryChatGptAsync(strPageText);
+                            string strPageText = Regex.Replace(objDriver.PageSource, "<[^>]*>", string.Empty);
+                            string strContent = strPageText.Length > 3000 ? strPageText.Substring(0, 3000) : strPageText;
 
                             Console.ForegroundColor = ConsoleColor.Green;
-                            Console.WriteLine($"{oItem.strName} - Summary:\n{strSummary}\n");
+                            Console.WriteLine($"{objItem.strName} - Summary:");
+                            Console.ResetColor();
+                            Console.WriteLine(strContent.Substring(0, Math.Min(strContent.Length, 500)) + "...\n");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"Failed to summarize {objItem.strName}: {ex.Message}");
                             Console.ResetColor();
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"Failed to summarize {oItem.strName}: {ex.Message}");
-                        Console.ResetColor();
-                    }
-                    finally
-                    {
-                        oSemaphore.Release();
-                    }
-                }));
-            }
 
-            Task.WaitAll(lstTasks.ToArray());
-            Console.WriteLine("\nEnd of program, pausing 10s");
-            Thread.Sleep(10000);
-        }
-
-        static async Task<string> fQueryChatGptAsync(string strInput)
-        {
-            using (HttpClient oClient = new HttpClient())
-            {
-                oClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {strApiKey}");
-
-                var oPayload = new
-                {
-                    model = "gpt-3.5-turbo",
-                    messages = new[]
-                    {
-                        new { role = "system", content = "You are a helpful assistant that summarizes student content." },
-                        new { role = "user", content = strInput.Substring(0, Math.Min(2000, strInput.Length)) }
-                    }
-                };
-
-                string strJson = JsonConvert.SerializeObject(oPayload);
-                var oResponse = await oClient.PostAsync(
-                    "https://api.openai.com/v1/chat/completions",
-                    new StringContent(strJson, Encoding.UTF8, "application/json")
-                );
-
-                if (!oResponse.IsSuccessStatusCode)
-                    return "Error: " + oResponse.StatusCode;
-
-                string strResult = await oResponse.Content.ReadAsStringAsync();
-                dynamic oResultObj = JsonConvert.DeserializeObject(strResult);
-                return (string)oResultObj.choices[0].message.content;
+                    Console.WriteLine("end of program, pausing 10s");
+                    Thread.Sleep(10000);
+                }
             }
         }
     }
